@@ -2,84 +2,75 @@ package com.CSV.test.controller;
 
 
 import com.CSV.test.model.CsvTemplate;
+import com.CSV.test.model.ValidMsg;
 import com.CSV.test.repos.CsvRepo;
 import com.CSV.test.serv.CsvServ;
 import lombok.extern.log4j.Log4j2;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.validation.Valid;
+import javax.validation.*;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.sql.SQLException;
+import java.util.*;
 
 @Log4j2
 @RestController
-public class FController {
+public class  FController {
 
     @Autowired
     private CsvRepo csvRepo;
 
-//    @Autowired
-//    @Qualifier("validator")
-//    private Validator validator;
+    ValidatorFactory validatorFactory = Validation.buildDefaultValidatorFactory();
+    Validator validator = validatorFactory.getValidator();
 
-//    @InitBinder
-//    protected void initBinder(WebDataBinder binder) {
-//        binder.setValidator(validator);
-//    }
-    static final Logger rootLogger = LogManager.getRootLogger();
-    static final Logger userLogger = LogManager.getLogger(CsvTemplate.class);
+    @PostMapping(value = "/read2", consumes = "multipart/form-data")
+    public ResponseEntity mpf2 (@Valid @RequestParam("file") MultipartFile file) throws IOException {
+        List<CsvTemplate> csvTemplates  =  CsvServ.csvServ(file.getInputStream());
 
-
-    private Map<String, CsvTemplate> csvTemplateMap = null;
-    public FController(){csvTemplateMap = new HashMap<String, CsvTemplate>(); }
-
-
-    @PostMapping(value = "/readf", consumes = "text/csv")
-    public void sf (@RequestBody InputStream stream)throws IOException {
-        csvRepo.saveAll(CsvServ.csvServ(stream));
-    }
-
-
-        @PostMapping(value = "/read", consumes = "multipart/form-data")
-    public ResponseEntity mpf (@Valid @RequestParam("file") MultipartFile file) throws IOException {
-            int count_error_rows = 0;
-
-            for (int i = 0; i < CsvServ.csvServ(file.getInputStream()).size(); i++) {
+        List<ValidMsg> errors_in_rows = new ArrayList<>();
+        log.info("--- Start analysis ---");
+        for (int i = 0; i < csvTemplates.size(); i++) {
+            try {
+                log.info("Analysis [{}] row with name [{}]", i, csvTemplates.get(i).getName());
+                Set<ConstraintViolation<CsvTemplate>> violations = validator.validate(csvTemplates.get(i));
+                if(violations.size() > 0) {
+                    for (ConstraintViolation constraintViolation : violations) {
+                        errors_in_rows.add(
+                                new ValidMsg(
+                                        (long)i,
+                                        constraintViolation.getPropertyPath().toString(),
+                                        constraintViolation.getMessage()
+                                )
+                        );
+                        log.info("Поле [{}] не соответствует условию [{}]", constraintViolation.getPropertyPath(), constraintViolation.getMessage());
+                    }
+                }
+                else {log.info("Can save to DB");}
+            } catch (Exception e) {
+                log.error(e.getMessage());
+            }
+        }
+        log.info("--- Finish analysis. Count errors [{}] ---", errors_in_rows.size());
+        if(errors_in_rows.size() == 0) {
+            log.info("--- Start save to DB ---");
+            for (int i = 0; i < csvTemplates.size(); i++) {
                 try {
-                    csvRepo.save(CsvServ.csvServ(file.getInputStream()).get(i));
-                } catch (Exception e) {
-                    count_error_rows++;
+                    csvRepo.save(csvTemplates.get(i));
+                }
+                catch (Exception e) {
+                    errors_in_rows.add( new ValidMsg( (long)i, "", e.getMessage()));
+                    log.error(e.getMessage());
                 }
             }
-            if (count_error_rows > 0) return ResponseEntity.badRequest().body(count_error_rows);
-            else return ResponseEntity.ok(count_error_rows);
+            log.info("--- Finish save to DB ---");
+            if(errors_in_rows.size() == 0) return ResponseEntity.ok(new ValidMsg( -1L, "", "Данных записано успешно ["+csvTemplates.size()+"]"));
+            else return ResponseEntity.status(500).body(errors_in_rows);
+        }else{
+            return ResponseEntity.badRequest().body(errors_in_rows);
 
         }
-
-    @PostMapping(value = "/read2", consumes = "multipart/form-data2")
-    public ResponseEntity mpf2 (@Valid @RequestParam("file") MultipartFile file) throws IOException {
-        int count_error_rows = 0;
-        List<CsvTemplate> csvTemplates = new ArrayList<>();
-        for (int i = 0; i < CsvServ.csvServ(file.getInputStream()).size(); i++) {
-            try {
-
-                csvRepo.save(CsvServ.csvServ(file.getInputStream()).get(i));
-            } catch (Exception e) {
-                csvTemplates.add( CsvServ.csvServ(file.getInputStream()).get(i));
-                count_error_rows++;
-                System.out.println(csvTemplates);
-            }
-        }
-        if (count_error_rows > 0) return ResponseEntity.badRequest().body(count_error_rows);
-        else return ResponseEntity.ok(count_error_rows);
     }
 }
