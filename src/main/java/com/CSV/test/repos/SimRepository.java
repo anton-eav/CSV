@@ -1,6 +1,7 @@
 package com.CSV.test.repos;
 
 
+import com.CSV.test.model.CsvModel;
 import com.CSV.test.model.SimModel;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,21 +17,6 @@ import java.text.SimpleDateFormat;
 @Log4j2
 @Repository
 public class SimRepository {
-
-//    sim_cards.code_operator
-//    sim_cards.ip_sim
-//    sim_cards.msisdn
-//    sim_cards.imsi
-//    sim_cards.iccid
-//    unit.date_manufacture
-//
-//
-//    INSERT INTO public.units(code_nomenclature, code_predefined)
-//    VALUES ('SIM', 'SIM')
-//    RETURNING id INTO u;
-//    INSERT INTO public.sim_cards(id, code_operator, ip_sim, msisdn, iccid, code_predefined)
-//    VALUES (u, p_code_operator, p_ip_sim, p_msisdn, p_iccid, 'SIM')
-//    RETURNING id INTO u;
 
     private final String unitInsert = "" +
         "INSERT INTO public.units(code_nomenclature, code_predefined, date_manufacture) " +
@@ -49,7 +35,7 @@ public class SimRepository {
     }
 
 
-    public void save(SimModel simModel){
+    public void save(CsvModel simModel){
         MapSqlParameterSource params = new MapSqlParameterSource();
 
         try {
@@ -71,5 +57,4 @@ public class SimRepository {
 
         jdbcTemplate.update(simInsert, params);
     }
-
 }
